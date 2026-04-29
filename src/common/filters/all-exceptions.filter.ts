@@ -72,20 +72,32 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const res = exception.getResponse();
+
+      if (typeof res === 'string') {
+        return {
+          status,
+          body: {
+            success: false,
+            error: { code: this.codeFromStatus(status), message: res },
+            meta: baseMeta,
+          },
+        };
+      }
+
+      const obj = res as { code?: unknown; message?: unknown; details?: unknown };
+      const code = typeof obj.code === 'string' ? obj.code : this.codeFromStatus(status);
       const message =
-        typeof res === 'string'
-          ? res
-          : ((res as { message?: string }).message ?? exception.message);
+        typeof obj.message === 'string'
+          ? obj.message
+          : Array.isArray(obj.message)
+            ? obj.message.filter((m) => typeof m === 'string').join(', ')
+            : exception.message;
 
       return {
         status,
         body: {
           success: false,
-          error: {
-            code: this.codeFromStatus(status),
-            message,
-            details: typeof res === 'object' && res !== null ? res : undefined,
-          },
+          error: { code, message, details: obj.details },
           meta: baseMeta,
         },
       };

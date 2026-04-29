@@ -17,3 +17,26 @@ export const REFRESH_TOKEN_REVOKED_REASON = {
 
 export type RefreshTokenRevokedReason =
   (typeof REFRESH_TOKEN_REVOKED_REASON)[keyof typeof REFRESH_TOKEN_REVOKED_REASON];
+
+/**
+ * Machine-readable error codes returned alongside HTTP 401 responses so the
+ * frontend can decide between "refresh and retry" and "logout" without parsing
+ * free-text messages.
+ */
+export const AUTH_ERROR_CODE = {
+  TokenMissing: 'TOKEN_MISSING',
+  TokenExpired: 'TOKEN_EXPIRED',
+  TokenInvalid: 'TOKEN_INVALID',
+  RefreshTokenInvalid: 'REFRESH_TOKEN_INVALID',
+  RefreshTokenExpired: 'REFRESH_TOKEN_EXPIRED',
+  RefreshTokenRevoked: 'REFRESH_TOKEN_REVOKED',
+  RefreshTokenReused: 'REFRESH_TOKEN_REUSED',
+} as const;
+
+export type AuthErrorCode = (typeof AUTH_ERROR_CODE)[keyof typeof AUTH_ERROR_CODE];
+
+/** `name` set by `jsonwebtoken` on expiry errors. Stable across versions. */
+const JWT_EXPIRED_ERROR_NAME = 'TokenExpiredError';
+
+export const isJwtExpiredError = (err: unknown): boolean =>
+  err instanceof Error && err.name === JWT_EXPIRED_ERROR_NAME;

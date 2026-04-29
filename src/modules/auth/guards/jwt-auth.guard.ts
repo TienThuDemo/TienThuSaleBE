@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AppConfigService } from '../../../config/app-config.service';
+import { AUTH_ERROR_CODE, isJwtExpiredError } from '../constants/auth.constants';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import type { AuthenticatedUser, JwtPayload } from '../types/jwt-payload';
 
@@ -25,7 +26,10 @@ export class JwtAuthGuard implements CanActivate {
 
     const token = this.extractBearerToken(request);
     if (!token) {
-      throw new UnauthorizedException('Missing access token');
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.TokenMissing,
+        message: 'Missing access token',
+      });
     }
 
     try {
@@ -34,8 +38,17 @@ export class JwtAuthGuard implements CanActivate {
       });
       request.user = { id: payload.sub, email: payload.email };
       return true;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired access token');
+    } catch (err) {
+      if (isJwtExpiredError(err)) {
+        throw new UnauthorizedException({
+          code: AUTH_ERROR_CODE.TokenExpired,
+          message: 'Access token has expired',
+        });
+      }
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.TokenInvalid,
+        message: 'Access token is invalid',
+      });
     }
   }
 

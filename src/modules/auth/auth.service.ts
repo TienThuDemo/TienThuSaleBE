@@ -6,7 +6,11 @@ import type { StringValue } from 'ms';
 import ms from 'ms';
 import { AppConfigService } from '../../config/app-config.service';
 import { UserRepository, type SafeUser } from '../users/repositories/user.repository';
-import { REFRESH_TOKEN_REVOKED_REASON } from './constants/auth.constants';
+import {
+  AUTH_ERROR_CODE,
+  isJwtExpiredError,
+  REFRESH_TOKEN_REVOKED_REASON,
+} from './constants/auth.constants';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenRepository } from './repositories/refresh-token.repository';
@@ -86,10 +90,11 @@ export class AuthService {
     const stored = await this.refreshTokens.findByHash(tokenHash);
 
     if (!stored) {
-      // Either the token was never issued by us or has been pruned. Treat
-      // the whole signed payload as suspicious — but without a known family
-      // we can only refuse this request.
-      throw new UnauthorizedException('Invalid refresh token');
+      // Token never issued by us or already pruned.
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenInvalid,
+        message: 'Refresh token is not recognized',
+      });
     }
 
     if (stored.revokedAt !== null) {
@@ -99,15 +104,24 @@ export class AuthService {
         stored.family,
         REFRESH_TOKEN_REVOKED_REASON.ReuseDetected,
       );
-      throw new UnauthorizedException('Refresh token has been revoked');
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenReused,
+        message: 'Refresh token has already been used; the session was revoked for safety',
+      });
     }
 
     if (stored.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Refresh token has expired');
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenExpired,
+        message: 'Refresh token has expired',
+      });
     }
 
     if (stored.userId !== payload.sub) {
-      throw new UnauthorizedException('Refresh token does not match its owner');
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenInvalid,
+        message: 'Refresh token does not match its owner',
+      });
     }
 
     return this.rotateTokens({
@@ -120,11 +134,26 @@ export class AuthService {
   }
 
   async logout(rawToken: string): Promise<void> {
+    // Reject forged / malformed tokens up-front so a client passing garbage
+    // (e.g. the literal Swagger placeholder "string") gets a clear 401.
+    // An expired-but-correctly-signed token is treated as idempotent success
+    // since the token is already non-functional — this matches RFC 7009 §2.2.
+    try {
+      await this.jwtService.verifyAsync<JwtPayload>(rawToken, {
+        secret: this.refreshSecret(),
+      });
+    } catch (err) {
+      if (isJwtExpiredError(err)) {
+        return;
+      }
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenInvalid,
+        message: 'Refresh token is invalid',
+      });
+    }
+
     const tokenHash = this.hashToken(rawToken);
     const stored = await this.refreshTokens.findByHash(tokenHash);
-
-    // Idempotent: silently no-op if token is unknown or already revoked. Avoid
-    // leaking information about the existence of a refresh token to a caller.
     if (!stored || stored.revokedAt !== null) {
       return;
     }
@@ -216,8 +245,17 @@ export class AuthService {
       return await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.refreshSecret(),
       });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+    } catch (err) {
+      if (isJwtExpiredError(err)) {
+        throw new UnauthorizedException({
+          code: AUTH_ERROR_CODE.RefreshTokenExpired,
+          message: 'Refresh token has expired',
+        });
+      }
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODE.RefreshTokenInvalid,
+        message: 'Refresh token is invalid',
+      });
     }
   }
 
