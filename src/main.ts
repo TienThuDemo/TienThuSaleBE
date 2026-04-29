@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -17,6 +17,11 @@ async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
 
   app.setGlobalPrefix(config.get('API_PREFIX'));
+  app.enableVersioning({
+    type: VersioningType.URI,
+    prefix: 'v',
+    defaultVersion: '1',
+  });
   app.enableShutdownHooks();
 
   // Security: HTTP headers (CSP, X-Frame-Options, HSTS, ...)
@@ -55,7 +60,7 @@ async function bootstrap(): Promise<void> {
 
   const port = config.get('PORT');
   await app.listen(port);
-  logger.log(`Application running on: http://localhost:${port}/${config.get('API_PREFIX')}`);
+  logger.log(`Application running on: http://localhost:${port}/${config.get('API_PREFIX')}/v1`);
 }
 
 void bootstrap();

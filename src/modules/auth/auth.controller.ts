@@ -9,7 +9,7 @@ import { RegisterDto } from './dto/register.dto';
 import type { AuthenticatedUser } from './types/jwt-payload';
 
 @ApiTags('Auth')
-@Controller('auth')
+@Controller({ path: 'auth', version: '1' })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
