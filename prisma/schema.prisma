@@ -1,0 +1,25 @@
+// Prisma schema file
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Pooled connection (PgBouncer / Supabase Pooler) used by the app at runtime.
+  url       = env("DATABASE_URL")
+  // Direct connection used by Prisma Migrate for DDL statements.
+  directUrl = env("DIRECT_URL")
+}
+
+/// Sample model — replace/extend with real domain models.
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
