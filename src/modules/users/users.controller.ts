@@ -1,6 +1,6 @@
 import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { User } from '@prisma/client';
+import { SafeUser } from './repositories/user.repository';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
@@ -11,13 +11,13 @@ export class UsersController {
 
   @Get()
   @ApiOperation({ summary: 'List all users' })
-  findAll(): Promise<User[]> {
+  findAll(): Promise<SafeUser[]> {
     return this.usersService.findAll();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get user by id' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<User> {
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<SafeUser> {
     return this.usersService.findOne(id);
   }
 }
