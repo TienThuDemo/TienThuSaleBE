@@ -51,26 +51,29 @@ src/
 - Refactor / xoá feature an toàn (không có import lén).
 - Test cô lập dễ hơn.
 
-**Cấu trúc chuẩn của 1 feature:**
+**Cấu trúc chuẩn của 1 feature có truy cập DB:**
 
 ```
 modules/<feature>/
 ├── <feature>.module.ts         # @Module() — định nghĩa imports/providers/exports
 ├── <feature>.controller.ts     # HTTP entry point (mỏng)
 ├── <feature>.service.ts        # Business logic
+├── repositories/               # Bắt buộc nếu feature đụng DB — 1 entity = 1 repository
+│   └── <entity>.repository.ts
 ├── dto/                        # Input/output DTO (1 file = 1 DTO)
 ├── guards/                     # (nếu có) guard riêng cho feature này
 ├── decorators/                 # (nếu có) decorator riêng
 └── types/                      # (nếu có) type/interface riêng, không export ra ngoài
 ```
 
+> Quy tắc Repository (bắt buộc) — chi tiết tại [08-database-prisma#repository-layer--bắt-buộc](./08-database-prisma.md#repository-layer--bắt-buộc).
+
 **Khi feature lớn dần** (>500 LOC service hoặc >5 endpoint), tách tiếp:
 
 ```
 modules/<feature>/
 ├── controllers/                # Nhiều controller cùng tag
-├── services/                   # Tách service theo trách nhiệm
-└── repositories/               # (nếu có Repository pattern)
+└── services/                   # Tách service theo trách nhiệm
 ```
 
 ## `common/` dùng cho cái gì

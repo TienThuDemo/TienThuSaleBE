@@ -7,10 +7,10 @@
 
 - [Naming trong schema.prisma](#naming-trong-schemaprisma)
 - [PrismaService — singleton](#prismaservice--singleton)
+- [Repository layer — bắt buộc](#repository-layer--bắt-buộc)
 - [Query — best practice](#query--best-practice)
 - [Transaction](#transaction)
 - [Migration](#migration)
-- [Repository pattern — khi nào](#repository-pattern--khi-nào)
 
 ## Naming trong schema.prisma
 
@@ -60,15 +60,103 @@ model User {
 - Lifecycle (connect/disconnect) gắn vào Nest.
 - Logging tập trung.
 
-**Good** (đã có ở `auth.service.ts`):
+**Lưu ý quan trọng:** `PrismaService` chỉ được inject vào **Repository**, không vào Service hay Controller. Xem mục kế tiếp.
+
+## Repository layer — bắt buộc
+
+**Rule:** Mỗi feature có nghiệp vụ DB **bắt buộc** có Repository layer. Service **không** gọi `PrismaService` trực tiếp.
+
+**Why:**
+
+- Tách biệt **business logic** (Service) khỏi **chi tiết truy cập DB** (Prisma query) — đổi ORM / cache / cho mock test không phải sửa Service.
+- Repository trở thành nơi **duy nhất** áp dụng convention DB (chọn field bằng `select`, không leak `passwordHash`, dùng `select` đồng nhất khi trả ra HTTP, transaction wrapper…).
+- Reviewer biết chính xác chỗ cần soi khi sửa query — không scatter `prisma.user.findX` khắp service.
+
+### Cấu trúc
+
+```
+modules/<feature>/
+├── <feature>.module.ts
+├── <feature>.controller.ts
+├── <feature>.service.ts
+├── repositories/
+│   └── <entity>.repository.ts   # 1 entity = 1 repository
+└── ...
+```
+
+### Quy tắc viết Repository
+
+1. **`@Injectable()`**, inject `PrismaService` qua constructor.
+2. Method **expose nghiệp vụ**, không expose Prisma type ra ngoài:
+   - **Tốt:** `findByEmail(email: string): Promise<User | null>`
+   - **Xấu:** `find(where: Prisma.UserWhereInput, select: Prisma.UserSelect)` — leak Prisma vào Service.
+3. **Không throw `HttpException`** — trả `null` hoặc `boolean`. Service map sang exception HTTP.
+4. **Đăng ký provider** trong `<feature>.module.ts`. **Không export** ra ngoài (Service ngoài module muốn dùng → đi qua Service public).
+5. Khi cần share giữa nhiều module → tách thành `xxx.module.ts` riêng và export Repository từ đó.
+
+### Ví dụ — UserRepository
 
 ```ts
-constructor(private readonly prisma: PrismaService) {}
+// modules/users/repositories/user.repository.ts
+import { Injectable } from '@nestjs/common';
+import { Prisma, User } from '@prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
 
-async findUser(email: string) {
-  return this.prisma.user.findUnique({ where: { email } });
+const SAFE_USER_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+export type SafeUser = Pick<User, 'id' | 'email' | 'name' | 'createdAt' | 'updatedAt'>;
+
+@Injectable()
+export class UserRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  findById(id: string): Promise<SafeUser | null> {
+    return this.prisma.user.findUnique({ where: { id }, select: SAFE_USER_SELECT });
+  }
+
+  findByEmail(email: string): Promise<User | null> {
+    // Trả full User (có passwordHash) — chỉ dùng nội bộ cho auth
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  list(): Promise<SafeUser[]> {
+    return this.prisma.user.findMany({ select: SAFE_USER_SELECT });
+  }
+
+  create(data: Prisma.UserCreateInput): Promise<SafeUser> {
+    return this.prisma.user.create({ data, select: SAFE_USER_SELECT });
+  }
 }
 ```
+
+### Service tiêu thụ Repository
+
+```ts
+@Injectable()
+export class UsersService {
+  constructor(private readonly userRepo: UserRepository) {}
+
+  async findOne(id: string): Promise<SafeUser> {
+    const user = await this.userRepo.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+}
+```
+
+### Naming
+
+- File: `<entity>.repository.ts` (1 entity = 1 file).
+- Class: `<Entity>Repository`.
+- Method nghiệp vụ: `findById`, `findByEmail`, `list`, `create`, `update`, `softDelete`, `existsByEmail`…
+
+→ Khi sửa schema → sửa Repository → Service không phải động vào nếu signature giữ nguyên.
 
 ## Query — best practice
 
@@ -138,18 +226,6 @@ npm run prisma:migrate:dev   # → tạo migration, apply lên dev DB
 # Production
 npm run prisma:migrate:deploy
 ```
-
-## Repository pattern — khi nào
-
-**Rule hiện tại:** **Không** bắt buộc. Service inject `PrismaService` thẳng (như `AuthService`, `UsersService` đang làm).
-
-**Khi nào tạo Repository?**
-
-- Logic query phức tạp (raw SQL, nhiều join, custom mapper).
-- Cần share query giữa nhiều service.
-- Cần mock dễ hơn cho test (Prisma mock đã đủ tốt với `jest-mock-extended`, nên thường không cần).
-
-Khi tạo, đặt ở `modules/<feature>/repositories/<entity>.repository.ts`, inject `PrismaService` bên trong, expose method nghiệp vụ (không leak `Prisma.UserWhereInput` ra ngoài).
 
 ---
 

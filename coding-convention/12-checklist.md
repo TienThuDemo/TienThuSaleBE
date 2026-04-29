@@ -10,6 +10,8 @@
 - [ ] Không có `any`, không `value!`, không `process.env.X` ngoài `src/config/` (xem [03](./03-typescript-style.md), [10](./10-configuration.md)).
 - [ ] Public method có khai báo return type explicit.
 - [ ] Controller mỏng — không có if/else business, không try/catch swallow lỗi (xem [04](./04-nestjs-patterns.md), [07](./07-error-handling-and-logging.md)).
+- [ ] **Service không gọi `PrismaService` trực tiếp** — đi qua Repository (xem [08](./08-database-prisma.md#repository-layer--bắt-buộc)).
+- [ ] Repository không throw `HttpException` — chỉ trả `null`/`boolean`/domain value.
 - [ ] Không tạo `index.ts` barrel.
 
 ## API

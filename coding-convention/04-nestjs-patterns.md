@@ -19,18 +19,22 @@
 ```
 HTTP request
     ↓
-Controller (validate via DTO, gọi service, không if-else business)
+Controller   (validate qua DTO, gọi service, không if-else business)
     ↓
-Service (business logic, gọi repository / Prisma, throw HttpException)
+Service      (business logic, gọi repository, throw HttpException)
     ↓
-Repository / PrismaService (chỉ data access)
+Repository   (data access — wrap PrismaService)
+    ↓
+PrismaService
 ```
 
-**Rule:** Cấm "leak" tầng:
+**Rule:** Cấm "leak" tầng — **4 nguyên tắc cứng**:
 
-- Controller **không** gọi `PrismaService` trực tiếp.
-- Service **không** đụng đến `Request`/`Response`.
-- Repository (nếu có) **không** throw `HttpException` — trả về `null` / domain error, để service map sang `HttpException`.
+- Controller **không** gọi Service của module khác qua import lén — đi qua module export.
+- Controller **không** gọi `PrismaService` hoặc `Repository` trực tiếp — chỉ gọi `Service`.
+- Service **không** gọi `PrismaService` trực tiếp — phải đi qua **Repository** (xem [08-database-prisma](./08-database-prisma.md#repository-layer--bắt-buộc)).
+- Service **không** đụng đến `Request` / `Response`.
+- Repository **không** throw `HttpException` — trả `null` / `boolean` / domain error; Service map sang `HttpException` cho HTTP.
 
 ## Module — chỉ wiring
 
@@ -89,16 +93,29 @@ login(@Body() dto: LoginDto): Promise<AuthResult> {
 **Rule:**
 
 - Stateless (không có field mutable). Stateful logic → tách provider riêng.
+- **Inject Repository, không inject `PrismaService` trực tiếp** — xem [08-database-prisma](./08-database-prisma.md#repository-layer--bắt-buộc).
 - Throw `HttpException` con cụ thể (`NotFoundException`, `ConflictException`, `UnauthorizedException`…) — xem [07](./07-error-handling-and-logging.md).
 - Method public **đều có return type explicit**.
 - Method private dùng `private` (không `_` prefix).
 
-**Good** (`auth.service.ts`):
+**Good:**
 
 ```ts
 async register(dto: RegisterDto): Promise<AuthResult> {
-  const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  const existing = await this.userRepo.findByEmail(dto.email);
   if (existing) throw new ConflictException('Email already registered');
+
+  const passwordHash = await bcrypt.hash(dto.password, this.config.get('BCRYPT_SALT_ROUNDS'));
+  const user = await this.userRepo.create({ email: dto.email, name: dto.name, passwordHash });
+  return this.buildAuthResult(user);
+}
+```
+
+**Bad:**
+
+```ts
+async register(dto: RegisterDto): Promise<AuthResult> {
+  const existing = await this.prisma.user.findUnique({ where: { email: dto.email } }); // ❌
   // ...
 }
 ```
