@@ -12,6 +12,11 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# CT
+.claude
+CLAUDE.md
+/setup-config
+
 # OS
 .DS_Store
 
@@ -54,5 +59,3 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-.claude
-/setup-config
