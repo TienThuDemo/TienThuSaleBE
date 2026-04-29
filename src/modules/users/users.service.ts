@@ -1,15 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
-
-  create(dto: CreateUserDto): Promise<User> {
-    return this.prisma.user.create({ data: dto });
-  }
 
   findAll(): Promise<User[]> {
     return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -17,6 +18,15 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix(config.get('API_PREFIX'));
   app.enableShutdownHooks();
+
+  // Security: HTTP headers (CSP, X-Frame-Options, HSTS, ...)
+  // Disable contentSecurityPolicy in dev so Swagger UI can load inline assets.
+  app.use(
+    helmet({
+      contentSecurityPolicy: config.isProduction ? undefined : false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   const corsOrigins = config.get('CORS_ORIGINS');
   app.enableCors({

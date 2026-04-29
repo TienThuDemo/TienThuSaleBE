@@ -19,6 +19,19 @@ export const envSchema = z.object({
 
   SWAGGER_ENABLED: booleanString.default(true),
   SWAGGER_PATH: z.string().default('docs'),
+
+  // Throttler — global rate limiting
+  THROTTLE_TTL: z.coerce.number().int().positive().default(60_000), // ms
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
+
+  // JWT
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 chars'),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_REFRESH_SECRET: z.string().min(32).optional(),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+
+  // Auth — bcrypt
+  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;
